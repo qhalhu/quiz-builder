@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<title>Quiz Builder — PWA (✅/❎)</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
+<!-- Security hardening -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Permissions-Policy"
+      content="geolocation=(), microphone=(), camera=(), usb=(), bluetooth=(), payment=()">
+
+<link rel="icon" href="data:,">
+
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121823; --panel-2:#0f1520; --text:#e7eef7; --muted:#a9b5c5;
+    --brand:#5dd4ff; --accent:#8b5cf6; --ok:#22c55e; --err:#ef4444; --warn:#f59e0b;
+    --card:#121826; --border:#1f2a3a; --chip:#0e1420;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:linear-gradient(180deg,var(--bg),#0b1320);color:var(--text)}
+
+  /* Top status banner */
+  .banner{position:sticky;top:0;padding:10px 14px;background:#052b18;color:#c5f7da;border-bottom:1px solid #134e31;z-index:1000}
+
+  /* Mobile header (shows on small screens) */
+  .mheader{display:none;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel-2));position:sticky;top:44px;z-index:900}
+  .mheader .hamburger{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:#0f1420;color:var(--text)}
+  .mheader h1{font-size:16px;margin:0;font-weight:600}
+
+  /* Layout */
+  .app{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 44px);position:relative}
+
+  /* Sidebar (desktop) */
+  .sidebar{background:linear-gradient(180deg,var(--panel),var(--panel-2));border-right:1px solid var(--border);padding:14px;overflow:auto}
+  .main{overflow:auto;padding:18px}
+
+  /* Generic UI */
+  .btn{background:#1a2433;color:var(--text);border:1px solid var(--border);padding:10px 14px;border-radius:10px;cursor:pointer}
+  .btn:hover{background:#1e293b}
+  .btn.primary{background:linear-gradient(180deg,#0ea5e9,#7c3aed);border-color:transparent}
+  .btn.danger{color:#fca5a5}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--border);border-radius:999px;background:#0e1420;font-size:12px}
+  .card{position:relative;border:1px solid var(--border);background:radial-gradient(1200px 500px at 50% -200px, #111c2a, #0b0f14 60%);border-radius:14px;padding:14px;margin-bottom:14px}
+  .tab{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:#0f1420;cursor:pointer;margin-right:6px}
+  .tab.active{box-shadow:0 0 0 2px #0ea5e966 inset}
+  .hidden{display:none !important}
+
+  textarea,input,select{width:100%;background:#0f1420;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;outline:none}
+  textarea{min-height:420px;resize:vertical}
+  input,button,select,textarea{font-size:16px} /* prevent iOS zoom */
+
+  .row{display:flex;gap:10px;align-items:center}
+  .row.wrap{flex-wrap:wrap}
+  .stack{display:flex;flex-direction:column;gap:8px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+  /* Options chips never overlap following content */
+  .options-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;margin-bottom:6px}
+
+  /* Choice rows */
+  .opt{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:10px;margin:10px 0;background:#0e1420}
+  .opt input{flex:0 0 auto;width:22px;height:22px}
+  .opt div{flex:1 1 auto;min-width:0;word-break:break-word}
+  .opt.correct{border-color:#1f8f53;background:#0a1d14}
+  .opt.wrong{border-color:#9a1a1a;background:#1a0f12}
+
+  .progress{height:10px;background:#0f1420;border:1px solid var(--border);border-radius:999px;overflow:hidden}
+  .bar{height:100%;background:linear-gradient(90deg,#0ea5e9,#8b5cf6)}
+  .question{font-weight:600;font-size:17px;margin-bottom:6px}
+  .small{font-size:12px;color:#a9b5c5}
+  .list-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .footer{opacity:.75;font-size:12px;text-align:center;margin-top:16px}
+  .footer a{color:#9ad7ff;text-decoration:none}
+
+  /* Player controls separated so nothing overlaps the choices */
+  .player-controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;margin-top:12px}
+
+  /* Install banner */
+  .install-banner {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #1a2433; border-top: 2px solid #0ea5e9;
+    padding: 12px; display: none; align-items: center; justify-content: space-between; z-index: 9999;
+  }
+  .install-banner p { margin:0; padding:0; font-size:14px; color:#e7eef7; }
+  .install-banner button {
+    background: linear-gradient(180deg,#0ea5e9,#7c3aed);
+    border: none; border-radius: 8px; padding: 6px 12px; color: white; cursor: pointer;
+  }
+  /* When banner is visible, give main more bottom space so nothing hides under it */
+  body.has-install .main{padding-bottom:110px}
+
+  /* ====== Small screens (iPad portrait, iPhone) ====== */
+  @media (max-width: 1000px){
+    .app{grid-template-columns:1fr}
+    .mheader{display:flex}
+    .sidebar{
+      position:fixed; inset:0 auto 0 0; width:min(85vw,360px); max-width:100%;
+      transform:translateX(-100%); transition:transform .25s ease;
+      z-index:1200; box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
+    }
+    body.drawer-open .sidebar{ transform:translateX(0) }
+    .main{padding:14px}
+    textarea{min-height:280px}
+    .grid2{grid-template-columns:1fr}
+  }
+</style>
+
+<!-- App code -->
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="banner" id="jsBanner">⚠️ JavaScript has not started yet…</div>
+
+<!-- Mobile header (hamburger) -->
+<div class="mheader">
+  <button id="menuBtn" class="hamburger" aria-label="Open menu">☰</button>
+  <h1>Quiz Builder</h1>
+  <div style="flex:1"></div>
+  <span class="pill" id="activeQuizLabelMobile">No quiz selected</span>
+</div>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <h2 style="margin:0 0 6px 0">Quiz Builder</h2>
+    <div class="pill" id="activeQuizLabel">No quiz selected</div>
+
+    <div class="stack" style="margin:12px 0">
+      <button class="btn" id="newQuizBtn">+ New quiz</button>
+      <button class="btn" id="importJsonBtn">Import JSON</button>
+      <input type="file" id="importFile" accept=".json" class="hidden" />
+      <button class="btn" id="startSampleBtn">▶ Start Sample Quiz</button>
+      <button class="btn" id="exportAllBtn">Export ALL (JSON)</button>
+      <button class="btn danger" id="clearAllBtn" title="Remove all saved quizzes from this device">Clear all data</button>
+      <button class="btn" id="closeDrawerBtn" style="margin-top:4px">Close</button>
+    </div>
+
+    <h3>Saved quizzes</h3>
+    <div id="quizList"></div>
+
+    <div class="footer">
+      <p><b>Privacy:</b> Your quizzes stay on this device (localStorage). Use Export/Import to move them.</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="row wrap" style="margin-bottom:10px">
+      <button class="tab active" data-tab="builder">Builder</button>
+      <button class="tab" data-tab="player">Player</button>
+    </div>
+
+    <!-- Builder -->
+    <section id="builder" class="card">
+      <div class="grid2">
+        <div>
+          <label class="small">Quiz name</label>
+          <input id="quizName" placeholder="e.g., Pharmacology — ACE inhibitors" />
+        </div>
+        <div>
+          <label class="small">Options</label>
+          <div class="options-row">
+            <label class="pill"><input type="checkbox" id="shuffleQuestions" style="margin-right:6px"> Shuffle questions</label>
+            <label class="pill"><input type="checkbox" id="shuffleChoices" style="margin-right:6px"> Shuffle choices</label>
+            <label class="pill"><input type="checkbox" id="instantFeedback" style="margin-right:6px" checked> Instant feedback</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Paste questions (✅/❎)</h3>
+        <textarea id="rawInput" placeholder="# Quiz: My First Quiz
+
+1) What does ACE stand for?
+✅ Angiotensin-Converting Enzyme
+❎ Acetylcholine Esterase
+❎ Adenosine Cyclase Enzyme
+❎ Acid Citrate Enzyme
+explain: ACE converts angiotensin I to angiotensin II.
+
+-  (You can separate questions with a single dash on its own line)"></textarea>
+        <div class="small" style="margin-top:6px">Tip: Use ✅ for correct, ❎ for incorrect. Optional <code>explain:</code> line. You can separate questions with a single <b>-</b> on its own line.</div>
+
+        <div class="row wrap" style="margin-top:10px;justify-content:space-between">
+          <div class="row wrap">
+            <button class="btn" id="parseBtn">Parse</button>
+            <button class="btn" id="testRunBtn" title="Run without saving">Test Run (unsaved)</button>
+            <button class="btn" id="loadSampleBtn">Load sample</button>
+            <button class="btn" id="copyPromptBtn" title="Copy the exact generation prompt">Copy Prompt</button>
+          </div>
+          <div class="row wrap">
+            <button class="btn" id="saveQuizBtn" title="Save (overwrites if editing)">Save quiz</button>
+            <button class="btn" id="saveAsBtn" title="Choose where to save the JSON">Save As…</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Parsed preview</h3>
+        <div class="small" style="margin-bottom:6px">Preview hides answers (no emojis shown).</div>
+        <div id="preview"></div>
+      </div>
+    </section>
+
+    <!-- Player -->
+    <section id="player" class="card hidden">
+      <div class="row wrap" style="align-items:center; margin-bottom:8px;">
+        <div class="pill" id="qMeta"></div>
+        <div class="pill" id="scoreMeta"></div>
+        <div style="flex:1"></div>
+        <button class="btn" id="restartBtn">Restart</button>
+      </div>
+
+      <div class="progress" style="margin:10px 0"><div id="progressBar" class="bar" style="width:0%"></div></div>
+
+      <!-- The question + choices -->
+      <div id="questionView"></div>
+
+      <!-- Controls moved into their own row so they never overlap choices -->
+      <div class="player-controls">
+        <div class="row wrap">
+          <button class="btn" id="prevBtn">&larr; Prev</button>
+          <button class="btn" id="nextBtn">Next &rarr;</button>
+        </div>
+        <button class="btn" id="finishBtn">Finish</button>
+      </div>
+
+      <div id="summary" class="card hidden" style="margin-top:12px"></div>
+    </section>
+  </main>
+</div>
+
+<!-- Install banner -->
+<div class="install-banner" id="installBanner">
+  <p>📲 Install Quiz Builder for offline use!</p>
+  <button id="installBtn">Install</button>
+</div>
+
+<!-- Error box -->
+<div id="errorBox" class="hidden">
+  <h4>⚠️ Script error detected</h4>
+  <pre id="errorLog">No errors yet.</pre>
+</div>
+
+<!-- PWA install + SW register -->
+<script>
+  // Install prompt (Android/desktop) or iOS hint
+  let deferredPrompt;
+  const ib = document.getElementById('installBanner');
+  const ibBtn = document.getElementById('installBtn');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); deferredPrompt = e; ib.style.display = 'flex';
+    document.body.classList.add('has-install');
+  });
+
+  ibBtn.addEventListener('click', async () => {
+    ib.style.display = 'none';
+    // remove extra padding if user installs
+    document.body.classList.remove('has-install');
+    if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; }
+    else { alert("On iPad/iPhone: Tap Share → Add to Home Screen to install."); }
+  });
+
+  // If not installed (browser mode), show hint after a moment (iOS Safari doesn't fire the event)
+  if (window.navigator.standalone === false || window.matchMedia('(display-mode: browser)').matches) {
+    setTimeout(()=>{
+      ib.style.display = 'flex';
+      document.body.classList.add('has-install');
+    }, 1200);
+  }
+
+  // Service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(console.error);
+  }
+</script>
+<script src="app.js" defer></script>
+</body>
+</html>
